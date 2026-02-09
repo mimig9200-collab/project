@@ -4,50 +4,36 @@
 <meta charset="UTF-8">
 <title>👥 صفحة الفريق</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <style>
-body{
-  margin:0;
-  font-family:Arial;
-  background:#000;
-  color:#FFD700;
-}
-.container{
-  max-width:900px;
-  margin:20px auto;
-  padding:20px;
-}
+body{margin:0;font-family:Arial;background:#000;color:#FFD700}
+.container{max-width:1000px;margin:20px auto;padding:20px}
 .box{
-  background:#1a1400;
-  border-radius:18px;
-  padding:20px;
-  margin-bottom:20px;
-  box-shadow:0 0 20px #FFD70044;
+  background:#1a1400;border-radius:18px;padding:20px;margin-bottom:20px;
+  box-shadow:0 0 20px #FFD70044
 }
 h2{text-align:center;margin-top:0}
-.member{
-  padding:10px;
-  border-bottom:1px solid #FFD70033;
-  font-size:14px;
+.member{padding:10px;border-bottom:1px solid #FFD70033;font-size:14px}
+.empty{text-align:center;color:#aaa}
+.loading{text-align:center;color:#fff}
+button{
+  width:100%;padding:15px;border:none;border-radius:12px;
+  background:#FFD700;color:#000;font-size:16px;font-weight:bold;cursor:pointer
 }
-.member:last-child{border:none}
-.level{color:#00ff99;font-weight:bold}
-.balance{color:#4dd0ff}
-.empty{
-  color:#aaa;
-  text-align:center;
-  padding:10px;
-}
+.balance{font-size:22px;font-weight:bold;text-align:center}
 </style>
 </head>
 
 <body>
-
 <div class="container">
 
   <div class="box">
+    <h2>💰 رصيدي</h2>
+    <div id="myBalance" class="balance">0 دج</div>
+  </div>
+
+  <div class="box">
     <h2>👥 الفريق الأول</h2>
-    <div id="team1"></div>
+    <div id="team1"><div class="loading">⏳ جاري التحميل...</div></div>
   </div>
 
   <div class="box">
@@ -60,86 +46,156 @@ h2{text-align:center;margin-top:0}
     <div id="team3"></div>
   </div>
 
+  <div class="box">
+    <button id="calcBtn">💰 احسب أرباح الفريق</button>
+  </div>
+
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
 import {
-  getFirestore, doc, getDoc, collection, query, where, getDocs
+  getFirestore, collection, query, where, getDocs,
+  doc, getDoc, updateDoc, increment
 } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
 /* Firebase */
 const firebaseConfig = {
   apiKey: "AIzaSyAa6ETi1DmEI-3nVuqjpsaodT0rXsP8bIw",
   authDomain: "aple-21978.firebaseapp.com",
-  projectId: "aple-21978",
-  storageBucket: "aple-21978.firebasestorage.app",
-  messagingSenderId: "1013598113300",
-  appId: "1:1013598113300:web:5e71138b4e75e2a2752101"
+  projectId: "aple-21978"
 };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+/* مبالغ المستويات */
+const LEVEL_AMOUNT = {
+  1:2500, 2:5000, 3:10000, 4:15000,
+  5:23000, 6:35000, 7:46000
+};
+
+/* نسب المستويات (7 أكبر) */
+const LEVEL_PERCENT = {
+  1:0.02, 2:0.05, 3:0.08, 4:0.10,
+  5:0.15, 6:0.20, 7:0.30
+};
+
+/* عامل الفرق */
+const TEAM_FACTOR = {
+  1:0.30, // الفريق الأول
+  2:0.20, // الفريق الثاني
+  3:0.05  // الفريق الثالث
+};
+
+let userId, myInviteCode, myBalance=0;
+let team1=[], team2=[], team3=[];
+
+/* تسجيل الدخول */
 onAuthStateChanged(auth, async user=>{
   if(!user) return;
+  userId = user.uid;
 
-  const meSnap = await getDoc(doc(db,"users",user.uid));
+  const meSnap = await getDoc(doc(db,"users",userId));
   if(!meSnap.exists()) return;
 
-  const myCode = meSnap.data().inviteCode;
+  const me = meSnap.data();
+  myInviteCode = me.inviteCode;
+  myBalance = me.balance || 0;
+  document.getElementById("myBalance").innerText = myBalance+" دج";
 
-  /* الفريق 1 */
-  const team1 = await getTeamByCode(myCode);
-  renderTeam(team1,"team1");
+  team1 = await getTeamByCode(myInviteCode);
+  render(team1,"team1");
 
-  /* الفريق 2 */
-  let team2 = [];
-  for(const u of team1){
-    const sub = await getTeamByCode(u.inviteCode);
-    team2.push(...sub);
-  }
-  renderTeam(team2,"team2");
+  team2 = await getNextTeamFast(team1);
+  render(team2,"team2");
 
-  /* الفريق 3 */
-  let team3 = [];
-  for(const u of team2){
-    const sub = await getTeamByCode(u.inviteCode);
-    team3.push(...sub);
-  }
-  renderTeam(team3,"team3");
+  team3 = await getNextTeamFast(team2);
+  render(team3,"team3");
 });
 
-/* جلب فريق حسب الرمز */
+/* جلب فريق بالكود */
 async function getTeamByCode(code){
-  const snap = await getDocs(query(
-    collection(db,"users"),
-    where("joinedBy","==",code)
-  ));
-  return snap.docs.map(d=>d.data());
+  if(!code) return [];
+  const snap = await getDocs(
+    query(collection(db,"users"), where("joinedBy","==",code))
+  );
+  return snap.docs;
 }
 
-/* عرض الفريق */
-function renderTeam(arr,id){
+/* جلب الفريق التالي */
+async function getNextTeamFast(prevTeam){
+  if(prevTeam.length===0) return [];
+  const codes = prevTeam.map(d=>d.data().inviteCode).filter(Boolean).slice(0,10);
+  if(codes.length===0) return [];
+  const snap = await getDocs(
+    query(collection(db,"users"), where("joinedBy","in",codes))
+  );
+  return snap.docs;
+}
+
+/* عرض */
+function render(arr,id){
   const box=document.getElementById(id);
   box.innerHTML="";
   if(arr.length===0){
     box.innerHTML=`<div class="empty">لا يوجد أعضاء</div>`;
     return;
   }
-  arr.forEach(u=>{
+  arr.forEach(d=>{
+    const u=d.data();
     box.innerHTML+=`
       <div class="member">
         👤 ${u.phone||"مستخدم"}<br>
-        ⭐ المستوى: <span class="level">${u.level||0}</span><br>
-        💰 الرصيد: <span class="balance">${u.balance||0} دج</span>
-      </div>
-    `;
+        ⭐ المستوى: ${u.level||0}<br>
+        🧷 آخر مستوى محسوب: ${u.lastRewardedLevel||0}
+      </div>`;
   });
 }
-</script>
 
+/* حساب الأرباح */
+document.getElementById("calcBtn").onclick = async ()=>{
+  let total = 0;
+
+  const calcTeam = async (arr, teamLevel)=>{
+    for(const d of arr){
+      const u = d.data();
+      const level = u.level || 0;
+      const last = u.lastRewardedLevel || 0;
+
+      if(level > last){
+        const amount =
+          LEVEL_AMOUNT[level] *
+          LEVEL_PERCENT[level] *
+          TEAM_FACTOR[teamLevel];
+
+        total += amount;
+
+        await updateDoc(doc(db,"users",d.id),{
+          lastRewardedLevel: level
+        });
+      }
+    }
+  };
+
+  await calcTeam(team1,1);
+  await calcTeam(team2,2);
+  await calcTeam(team3,3);
+
+  if(total>0){
+    await updateDoc(doc(db,"users",userId),{
+      balance: increment(total)
+    });
+    myBalance += total;
+    document.getElementById("myBalance").innerText =
+      myBalance.toFixed(0)+" دج";
+    alert("✅ تمت إضافة "+total.toFixed(0)+" دج");
+  }else{
+    alert("❌ لا توجد أرباح جديدة");
+  }
+};
+</script>
 </body>
 </html>
