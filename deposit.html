@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<title>ITALIACCIAI - صفحة الإيداع</title>
+<title>ITALIACCIAI - تسجيل الإيداع</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
@@ -24,49 +24,62 @@ body{
   box-shadow:0 0 30px rgba(0,255,0,.35);
   border:2px solid #0f0;
   text-align:center;
-}
+/* LOGO ضوء متحرك */
 .logo{
   font-size:26px;
   font-weight:bold;
-  color:#0f0;
-  margin-bottom:10px;
+  background: linear-gradient(
+    90deg,
+    #0f0 0%,
+    #ffffff 50%,
+    #0f0 100%
+  );
+  background-size:200% auto;
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  animation: shineLogo 2s linear infinite;
+  text-shadow:
+    0 0 5px #0f0,
+    0 0 15px #0f0;
 }
+
+/* BANNER ضوء يمشي */
 .banner{
-  background:linear-gradient(90deg,#0f0,#000,#0f0);
+  background: linear-gradient(
+    90deg,
+    #0f0,
+    #000,
+    #0f0
+  );
+  background-size:200% auto;
   color:#000;
   padding:12px;
   border-radius:15px;
   font-weight:bold;
-  animation:flash 1s infinite alternate;
+  margin:15px 0;
+  animation: shineBanner 3s linear infinite;
+  box-shadow:
+    0 0 10px #0f0,
+    0 0 25px #0f0;
 }
-@keyframes flash{
-  from{box-shadow:0 0 10px #0f0}
-  to{box-shadow:0 0 30px #0f0}
+
+/* حركة الضوء */
+@keyframes shineLogo{
+  from{
+    background-position:0% center;
+  }
+  to{
+    background-position:200% center;
+  }
 }
-.ccp-box{
-  margin-top:15px;
-  background:#111;
-  padding:12px;
-  border-radius:15px;
-  text-align:right;
-}
-.ccp-row{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:10px;
-}
-.ccp-number{
-  color:#0f0;
-  font-weight:bold;
-}
-.copy-btn{
-  background:#0f0;
-  border:none;
-  border-radius:10px;
-  padding:6px 10px;
-  font-size:12px;
-  cursor:pointer;
+
+@keyframes shineBanner{
+  from{
+    background-position:200% center;
+  }
+  to{
+    background-position:0% center;
+  }
 }
 input,button{
   width:100%;
@@ -83,8 +96,10 @@ button{
   font-weight:bold;
   cursor:pointer;
 }
+button:disabled{opacity:.6}
+
 .history{
-  margin-top:12px;
+  margin-top:15px;
   background:#000;
   padding:10px;
   border-radius:15px;
@@ -101,26 +116,23 @@ hr{border:0;border-top:1px solid #0f03}
 
 <div class="card">
   <div class="logo">ITALIACCIAI</div>
+  <div class="banner">💥 تسجيل الإيداع عبر بريدي موب 💥</div>
 
-  <div class="banner">💥 الإيداع عن طريق بريدي موب ✅ 💥</div>
+  <!-- فورم واحد -->
+  <form id="depositForm">
 
-  <div class="ccp-box">
-    💳 رقم CCP الرسمي:
-    <div class="ccp-row">
-      <div class="ccp-number" id="officialCCP">
-        00799999002084015427
-      </div>
-      <button class="copy-btn" onclick="copyCCP()">نسخ</button>
-    </div>
-  </div>
+    <input type="text" id="name" placeholder="👤 اسمك" required>
+    <input type="file" id="photo" accept="image/*" required>
+    <input type="number" id="amount" placeholder="💰 مبلغ الإيداع" required>
+    <input type="text" id="phone" placeholder="📱 رقم الهاتف" required>
+    <input type="text" id="userCCP" placeholder="🏦 رقم حسابك CCP" required>
 
-  <input id="amount" type="number" placeholder="💰 مبلغ الإيداع">
-  <input id="phone" type="text" placeholder="📱 رقم الهاتف">
-  <input id="userCCP" type="text" placeholder="🏦 رقم حسابك CCP">
+    <button type="submit" id="sendBtn">📤 إرسال الإيداع</button>
 
-  <button id="send">📥 تسجيل الإيداع</button>
+  </form>
 
-  <div class="history" id="history">تحميل الإيداعات...</div>
+  <!-- سجل الإيداع -->
+  <div class="history" id="history">📄 سجل الإيداعات...</div>
 </div>
 
 <!-- Firebase -->
@@ -144,58 +156,84 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-let uid = null;
-const historyBox = document.getElementById("history");
+let uid=null;
+const historyBox=document.getElementById("history");
 
 signInAnonymously(auth);
 
-onAuthStateChanged(auth, user=>{
-  if(user){
-    uid = user.uid;
+onAuthStateChanged(auth,u=>{
+  if(u){
+    uid=u.uid;
     loadHistory();
   }
 });
 
-/* نسخ CCP */
-window.copyCCP = ()=>{
-  navigator.clipboard.writeText(
-    document.getElementById("officialCCP").innerText
-  );
-  alert("✅ تم نسخ رقم CCP");
-};
+/* إرسال الإيداع */
+const form=document.getElementById("depositForm");
+const btn=document.getElementById("sendBtn");
 
-/* تسجيل الإيداع */
-document.getElementById("send").onclick = async ()=>{
-  if(!amount.value || !phone.value || !userCCP.value){
-    alert("❌ اكمل جميع البيانات");
-    return;
+form.onsubmit = async (e)=>{
+  e.preventDefault();
+  btn.disabled=true;
+  btn.innerText="⏳ جاري الإرسال...";
+
+  const name=nameInput.value;
+  const photo=photoInput.files[0];
+  const amount=amountInput.value;
+  const phone=phoneInput.value;
+  const userCCP=userCCPInput.value;
+
+  try{
+    /* Telegram */
+    const tg=new FormData();
+    tg.append("chat_id","5722416028");
+    tg.append(
+      "caption",
+      `👤 الاسم: ${name}\n💰 المبلغ: ${amount} دج\n📱 الهاتف: ${phone}\n🏦 CCP: ${userCCP}`
+    );
+    tg.append("photo",photo);
+
+    await fetch(
+      "https://api.telegram.org/bot8561874849:AAEIpNUvli0QHp-c_GfnYf3NwB5k-f7nMiI/sendPhoto",
+      {method:"POST",body:tg}
+    );
+
+    /* Firebase */
+    await addDoc(collection(db,"deposits"),{
+      uid,
+      name,
+      amount:Number(amount),
+      phone,
+      userCCP,
+      status:"قيد المراجعة",
+      createdAt:serverTimestamp()
+    });
+
+    form.reset();
+    alert("✅ تم إرسال الإيداع بنجاح");
+
+  }catch(err){
+    alert("❌ حدث خطأ");
+    console.error(err);
   }
 
-  await addDoc(collection(db,"deposits"),{
-    uid,
-    amount: Number(amount.value),
-    phone: phone.value,
-    userCCP: userCCP.value,
-    status: "قيد المراجعة",
-    createdAt: serverTimestamp()
-  });
-
-  amount.value = phone.value = userCCP.value = "";
+  btn.disabled=false;
+  btn.innerText="📤 إرسال الإيداع";
 };
 
-/* عرض سجل المستخدم */
+/* سجل المستخدم */
 function loadHistory(){
-  const q = query(
+  const q=query(
     collection(db,"deposits"),
     where("uid","==",uid)
   );
 
-  onSnapshot(q, snap=>{
+  onSnapshot(q,snap=>{
     let html="";
     snap.forEach(d=>{
-      const x = d.data();
+      const x=d.data();
       if(x.createdAt){
-        html += `
+        html+=`
           💰 ${x.amount} دج<br>
           📱 ${x.phone}<br>
           🏦 ${x.userCCP}<br>
@@ -208,6 +246,13 @@ function loadHistory(){
     historyBox.innerHTML = html || "لا توجد إيداعات";
   });
 }
+
+/* ربط inputs */
+const nameInput=document.getElementById("name");
+const photoInput=document.getElementById("photo");
+const amountInput=document.getElementById("amount");
+const phoneInput=document.getElementById("phone");
+const userCCPInput=document.getElementById("userCCP");
 </script>
 
 </body>
