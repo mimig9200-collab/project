@@ -119,7 +119,23 @@ hr{border:0;border-top:1px solid #0f03}
   <div class="banner">💥 تسجيل الإيداع عبر بريدي موب 💥</div>
 
   <!-- فورم واحد -->
-  <form id="depositForm">
+  <form id="depositForm"><div
+  id="copyBox"
+  onclick="copyCCP()"
+  style="
+    background:#111;
+    border:1px solid #0f0;
+    border-radius:12px;
+    padding:12px;
+    text-align:center;
+    color:#0f0;
+    font-size:13px;
+    cursor:pointer;
+    user-select:none;
+  "
+>
+📋 نسخ رقم كامل 00799999002084015427
+</div>
 
     <input type="text" id="name" placeholder="👤 اسمك" required>
     <input type="file" id="photo" accept="image/*" required>
@@ -253,6 +269,18 @@ const photoInput=document.getElementById("photo");
 const amountInput=document.getElementById("amount");
 const phoneInput=document.getElementById("phone");
 const userCCPInput=document.getElementById("userCCP");
+</script><script>
+function copyCCP(){
+  const box = document.getElementById("copyBox");
+  const number = "00799999002084015427";
+
+  navigator.clipboard.writeText(number);
+
+  box.innerText = "✅ تم نسخ الرقم";
+  setTimeout(()=>{
+    box.innerText = "📋 نسخ رقم كامل 00799999002084015427";
+  }, 1500);
+}
 </script>
 
 </body>
